@@ -2,9 +2,7 @@
 #include <vulkan/vulkan.hpp>
 #include <GLFW/glfw3.h>
 
-#include <algorithm>
 #include <limits>
-#include <cstdint>
 #include <optional>
 #include <map>
 #include <memory>
@@ -53,7 +51,7 @@ static std::vector<char> readFile(const std::string& filename) {
     size_t fileSize = (size_t) file.tellg();
     std::vector<char> buffer(fileSize);
     file.seekg(0);
-    file.read(buffer.data(), fileSize);
+    file.read(buffer.data(), (long) fileSize);
     file.close();
 
     return buffer;
@@ -64,6 +62,9 @@ public:
     Graphics();
     ~Graphics();
 
+    void runMainLoop();    
+
+private:
     void createVulkanInstance();
     static bool checkValidationSupport();
     void pickPhysicalDevice();
@@ -81,15 +82,12 @@ public:
 
     unsigned physicalDeviceRating(vk::PhysicalDevice);
     QueueFamilyIndices findQueueFamilies(vk::PhysicalDevice);
-    bool checkDeviceExtensionSupport(vk::PhysicalDevice);
+    static bool checkDeviceExtensionSupport(vk::PhysicalDevice);
     SwapChainSupportDetails querySwapChainSupport(vk::PhysicalDevice);
-    vk::SurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& availableFormats);
-    vk::PresentModeKHR chooseSwapPresentMode(const std::vector<vk::PresentModeKHR> &availablePresentModes);
+    static vk::SurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& availableFormats);
+    static vk::PresentModeKHR chooseSwapPresentMode(const std::vector<vk::PresentModeKHR> &availablePresentModes);
     vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities);
 
-    void runMainLoop();    
-
-private:
     GLFWwindow* window;
 
     vk::Instance instance;
