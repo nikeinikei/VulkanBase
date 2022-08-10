@@ -3,18 +3,25 @@ project(VulkanTest)
 
 set(CMAKE_CXX_STANDARD 20)
 
-find_package(Vulkan REQUIRED)
-find_package(glfw3 REQUIRED)
-find_package(glm REQUIRED)
+add_subdirectory(dependencies/glfw-3.3.8)
 
-file(GLOB IMGUI_SOURCES imgui/ *.cpp)
+find_package(Vulkan REQUIRED)
+
+file(GLOB IMGUI_SOURCES dependencies/imgui/ *.cpp)
 
 add_executable(VulkanTest
         src/main.cpp
         ${IMGUI_SOURCES})
 
 target_link_libraries(VulkanTest 
-    ${Vulkan_LIBRARIES}
-    glfw)
+        ${Vulkan_LIBRARIES}
+        glfw)
 
-include_directories(${Vulkan_INCLUDE_DIRS} imgui)
+include_directories(
+        ${Vulkan_INCLUDE_DIRS} 
+        dependencies/imgui
+        dependencies/glm)
+
+if(MSVC)
+    set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT VulkanTest)
+endif()

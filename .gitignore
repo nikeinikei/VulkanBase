@@ -2,3 +2,14 @@
 .idea
 build
 cmake-build-debug
+CMakeFiles
+.vs
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.cmake
+CMakeCache.txt
+*.sln
+Debug
+Release
+x64
