@@ -573,6 +573,15 @@ void Graphics::createGraphicsPipeline() {
             .pColorAttachmentFormats = &swapChainImageFormat,
     };
 
+    std::vector<vk::DynamicState> dynamicStates = {
+            vk::DynamicState::eViewport
+    };
+
+    vk::PipelineDynamicStateCreateInfo dynamicState {
+        .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+        .pDynamicStates = dynamicStates.data(),
+    };
+
     vk::GraphicsPipelineCreateInfo pipelineInfo{
         .pNext = &pipelineRenderingCreateInfo,
         .stageCount = 2,
@@ -584,7 +593,7 @@ void Graphics::createGraphicsPipeline() {
         .pMultisampleState = &multisampling,
         .pDepthStencilState = nullptr,
         .pColorBlendState = &colorBlending,
-        .pDynamicState = nullptr,
+        .pDynamicState = &dynamicState,
         .layout = pipelineLayout,
         .renderPass = nullptr,
         .subpass = 0,
@@ -645,6 +654,18 @@ void Graphics::recordCommandBuffer(vk::CommandBuffer cmdBuffer, uint32_t imageIn
 
     cmdBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline);
 
+    std::array<vk::Viewport, 1> viewports = {
+        vk::Viewport {
+            .x = 0.0f,
+            .y = 0.0f,
+            .width = static_cast<float>(swapChainExtent.width),
+            .height = static_cast<float>(swapChainExtent.height),
+            .minDepth = 0.0f,
+            .maxDepth = 1.0f,
+        }
+    };
+
+    cmdBuffer.setViewport(0, viewports);
 
     cmdBuffer.draw(3, 1, 0, 0);
 
