@@ -11,6 +11,8 @@
 #include <set>
 #include <fstream>
 
+const int MAX_FRAMES_IN_FLIGHT = 2;
+
 static const std::vector<const char*> validationLayers = {
         "VK_LAYER_KHRONOS_validation"
 };
@@ -74,7 +76,7 @@ private:
     void createImageViews();
     void createGraphicsPipeline();
     void createCommandPool();
-    void createCommandBuffer();
+    void createCommandBuffers();
     void createSyncObjects();
     void recordCommandBuffer(vk::CommandBuffer cmdBuffer, uint32_t imageIndex);
     void drawFrame();
@@ -104,10 +106,11 @@ private:
     vk::PipelineLayout pipelineLayout;
     vk::Pipeline graphicsPipeline;
     vk::CommandPool commandPool;
-    vk::CommandBuffer commandBuffer;
-    vk::Semaphore imageAvailableSemaphore;
-    vk::Semaphore renderFinishedSemaphore;
-    vk::Fence inFlightFence;
+    std::vector<vk::CommandBuffer> commandBuffers;
+    std::vector<vk::Semaphore> imageAvailableSemaphores;
+    std::vector<vk::Semaphore> renderFinishedSemaphores;
+    std::vector<vk::Fence> inFlightFences;
+    uint32_t currentFrame = 0;
 
 };
 
@@ -127,7 +130,7 @@ Graphics::Graphics() {
         createImageViews();
         createGraphicsPipeline();
         createCommandPool();
-        createCommandBuffer();
+        createCommandBuffers();
         createSyncObjects();
     } catch (std::exception const &e) {
         std::cerr << "something went wrong while initializing vulkan\n"
@@ -246,7 +249,6 @@ void Graphics::pickPhysicalDevice() {
     }
 }
 
-
 QueueFamilyIndices Graphics::findQueueFamilies(vk::PhysicalDevice physDevice) {
     QueueFamilyIndices indices;
 
@@ -278,9 +280,20 @@ void Graphics::runMainLoop() {
 }
 
 Graphics::~Graphics() {
-    device.destroySemaphore(imageAvailableSemaphore);
-    device.destroySemaphore(renderFinishedSemaphore);
-    device.destroyFence(inFlightFence);
+    for (auto& semaphore : imageAvailableSemaphores) {
+        device.destroy(semaphore);
+    }
+    imageAvailableSemaphores.clear();
+
+    for (auto& semaphore : renderFinishedSemaphores) {
+        device.destroy(semaphore);
+    }
+    renderFinishedSemaphores.clear();
+
+    for (const auto& fence : inFlightFences) {
+        device.destroy(fence);
+    }
+    inFlightFences.clear();
 
     device.destroy(commandPool);
 
@@ -616,14 +629,12 @@ void Graphics::createCommandPool() {
     commandPool = device.createCommandPool(poolInfo);
 }
 
-void Graphics::createCommandBuffer() {
-    auto commandBuffers = device.allocateCommandBuffers({
+void Graphics::createCommandBuffers() {
+    commandBuffers = device.allocateCommandBuffers({
                                           .commandPool = commandPool,
                                           .level = vk::CommandBufferLevel::ePrimary,
-                                          .commandBufferCount = 1,
+                                          .commandBufferCount = MAX_FRAMES_IN_FLIGHT,
                                   });
-
-    commandBuffer = commandBuffers.at(0);
 }
 
 void Graphics::recordCommandBuffer(vk::CommandBuffer cmdBuffer, uint32_t imageIndex) {
@@ -674,32 +685,32 @@ void Graphics::recordCommandBuffer(vk::CommandBuffer cmdBuffer, uint32_t imageIn
     cmdTransitionImageLayout(cmdBuffer, swapChainImages[imageIndex], vk::ImageLayout::eColorAttachmentOptimal,
                              vk::ImageLayout::ePresentSrcKHR);
 
-    commandBuffer.end();
+    cmdBuffer.end();
 }
 
 void Graphics::drawFrame() {
-    uint32_t imageIndex = device.acquireNextImageKHR(swapChain, UINT64_MAX, imageAvailableSemaphore, VK_NULL_HANDLE).value;
+    uint32_t imageIndex = device.acquireNextImageKHR(swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE).value;
 
-    device.waitForFences(1, &inFlightFence, VK_TRUE, UINT64_MAX);
-    device.resetFences(1, &inFlightFence);
+    device.waitForFences(1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+    device.resetFences(1, &inFlightFences[currentFrame]);
 
-    commandBuffer.reset();
-    recordCommandBuffer(commandBuffer, imageIndex);
+    commandBuffers[currentFrame].reset();
+    recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
 
-    vk::Semaphore waitSemaphores[] = {imageAvailableSemaphore};
+    vk::Semaphore waitSemaphores[] = {imageAvailableSemaphores[currentFrame]};
     vk::PipelineStageFlags waitStages[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
-    vk::Semaphore signalSemaphores[] = {renderFinishedSemaphore};
+    vk::Semaphore signalSemaphores[] = {renderFinishedSemaphores[currentFrame]};
     vk::SubmitInfo submitInfo {
         .waitSemaphoreCount = 1,
         .pWaitSemaphores = waitSemaphores,
         .pWaitDstStageMask = waitStages,
         .commandBufferCount = 1,
-        .pCommandBuffers = &commandBuffer,
+        .pCommandBuffers = &commandBuffers[currentFrame],
         .signalSemaphoreCount = 1,
         .pSignalSemaphores = signalSemaphores
     };
 
-    graphicsQueue.submit(1, &submitInfo, inFlightFence);
+    graphicsQueue.submit(1, &submitInfo, inFlightFences[currentFrame]);
 
     vk::SwapchainKHR swapChains[] = {swapChain};
     vk::PresentInfoKHR presentInfo{
@@ -711,14 +722,18 @@ void Graphics::drawFrame() {
     };
 
     presentQueue.presentKHR(presentInfo);
+
+    currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
 void Graphics::createSyncObjects() {
-    imageAvailableSemaphore = device.createSemaphore({});
-    renderFinishedSemaphore = device.createSemaphore({});
-    inFlightFence = device.createFence({
-        .flags = vk::FenceCreateFlagBits::eSignaled,
-    });
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        imageAvailableSemaphores.push_back(device.createSemaphore({}));
+        renderFinishedSemaphores.push_back(device.createSemaphore({}));
+        inFlightFences.push_back(device.createFence({
+            .flags = vk::FenceCreateFlagBits::eSignaled,
+        }));
+    }
 }
 
 void Graphics::cmdTransitionImageLayout(vk::CommandBuffer cmdBuffer, vk::Image image, vk::ImageLayout oldLayout,
