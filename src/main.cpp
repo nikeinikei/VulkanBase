@@ -80,6 +80,10 @@ private:
     void createSyncObjects();
     void recordCommandBuffer(vk::CommandBuffer cmdBuffer, uint32_t imageIndex);
     void drawFrame();
+    void recreateSwapChain();
+    void cleanupSwapChain();
+    void cleanup();
+
     static void cmdTransitionImageLayout(vk::CommandBuffer cmdBuffer, vk::Image image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
 
     unsigned physicalDeviceRating(vk::PhysicalDevice);
@@ -118,7 +122,7 @@ Graphics::Graphics() {
     glfwInit();
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     window = glfwCreateWindow(1024, 768, "vulkan test", nullptr, nullptr);
 
     try {
@@ -280,37 +284,7 @@ void Graphics::runMainLoop() {
 }
 
 Graphics::~Graphics() {
-    for (auto& semaphore : imageAvailableSemaphores) {
-        device.destroy(semaphore);
-    }
-    imageAvailableSemaphores.clear();
-
-    for (auto& semaphore : renderFinishedSemaphores) {
-        device.destroy(semaphore);
-    }
-    renderFinishedSemaphores.clear();
-
-    for (const auto& fence : inFlightFences) {
-        device.destroy(fence);
-    }
-    inFlightFences.clear();
-
-    device.destroy(commandPool);
-
-    device.destroy(graphicsPipeline);
-    device.destroy(pipelineLayout);
-
-    for (auto imageView: swapChainImageViews) {
-        device.destroyImageView(imageView);
-    }
-
-    device.destroy(swapChain);
-    vkDestroySurfaceKHR(instance, surface, nullptr);
-    device.destroy();
-    instance.destroy();
-
-    glfwDestroyWindow(window);
-    glfwTerminate();
+    cleanup();
 }
 
 void Graphics::createDevice() {
@@ -689,9 +663,23 @@ void Graphics::recordCommandBuffer(vk::CommandBuffer cmdBuffer, uint32_t imageIn
 }
 
 void Graphics::drawFrame() {
-    uint32_t imageIndex = device.acquireNextImageKHR(swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE).value;
-
     device.waitForFences(1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+    
+    auto result = device.acquireNextImageKHR(swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE);
+
+    uint32_t imageIndex = 0;
+    switch (result.result) {
+    case vk::Result::eSuccess:
+        imageIndex = result.value;
+        break;
+    case vk::Result::eTimeout:
+    case vk::Result::eNotReady:
+    case vk::Result::eSuboptimalKHR:
+    case vk::Result::eErrorOutOfDateKHR:
+        recreateSwapChain();
+        return;
+    }
+
     device.resetFences(1, &inFlightFences[currentFrame]);
 
     commandBuffers[currentFrame].reset();
@@ -721,9 +709,71 @@ void Graphics::drawFrame() {
         .pImageIndices = &imageIndex,
     };
 
-    presentQueue.presentKHR(presentInfo);
+    try {
+        auto presentResult = presentQueue.presentKHR(presentInfo);
+        switch (presentResult) {
+        case vk::Result::eSuboptimalKHR:
+            recreateSwapChain();
+            break;
+        default:
+            if (presentResult != vk::Result::eSuccess) {
+                throw std::runtime_error("failed to present swap chain image");
+            }
+        }
+    }
+    catch (std::runtime_error& e) {
+        recreateSwapChain();
+    }
 
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+void Graphics::recreateSwapChain() {
+    cleanupSwapChain();
+
+    createSwapChain();
+    createImageViews();
+}
+
+void Graphics::cleanupSwapChain() {
+    device.waitIdle();
+
+    for (const auto& imageView : swapChainImageViews) {
+        device.destroy(imageView);
+    }
+
+    device.destroy(swapChain);
+}
+
+void Graphics::cleanup() {
+    cleanupSwapChain();
+
+    for (auto& semaphore : imageAvailableSemaphores) {
+        device.destroy(semaphore);
+    }
+    imageAvailableSemaphores.clear();
+
+    for (auto& semaphore : renderFinishedSemaphores) {
+        device.destroy(semaphore);
+    }
+    renderFinishedSemaphores.clear();
+
+    for (const auto& fence : inFlightFences) {
+        device.destroy(fence);
+    }
+    inFlightFences.clear();
+
+    device.destroy(commandPool);
+
+    device.destroy(graphicsPipeline);
+    device.destroy(pipelineLayout);
+
+    vkDestroySurfaceKHR(instance, surface, nullptr);
+    device.destroy();
+    instance.destroy();
+
+    glfwDestroyWindow(window);
+    glfwTerminate();
 }
 
 void Graphics::createSyncObjects() {
