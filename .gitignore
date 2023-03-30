@@ -7,7 +7,6 @@ CMakeFiles
 *.vcxproj
 *.vcxproj.filters
 *.vcxproj.user
-*.cmake
 CMakeCache.txt
 *.sln
 Debug
