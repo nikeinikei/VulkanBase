@@ -46,22 +46,6 @@ struct SwapChainSupportDetails {
     std::vector<vk::PresentModeKHR> presentModes;
 };
 
-static std::vector<char> readFile(const std::string& filename) {
-    std::ifstream file(filename, std::ios::ate | std::ios::binary);
-
-    if (!file.is_open()) {
-        throw std::runtime_error("failed to open file");
-    }
-
-    size_t fileSize = (size_t) file.tellg();
-    std::vector<char> buffer(fileSize);
-    file.seekg(0);
-    file.read(buffer.data(), (long) fileSize);
-    file.close();
-
-    return buffer;
-}
-
 class Graphics {
 public:
     Graphics();
@@ -652,7 +636,9 @@ void Graphics::recordCommandBuffer(vk::CommandBuffer cmdBuffer, uint32_t imageIn
 }
 
 void Graphics::drawFrame() {
-    device.waitForFences(1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+    if (device.waitForFences(1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX) != vk::Result::eSuccess) {
+        throw std::runtime_error("could not wait for fences");
+    }
     
     auto result = device.acquireNextImageKHR(swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE);
 
@@ -669,7 +655,9 @@ void Graphics::drawFrame() {
         return;
     }
 
-    device.resetFences(1, &inFlightFences[currentFrame]);
+    if (device.resetFences(1, &inFlightFences[currentFrame]) != vk::Result::eSuccess) {
+        throw std::runtime_error("could not reset fences");
+    }
 
     commandBuffers[currentFrame].reset();
     recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
@@ -687,7 +675,9 @@ void Graphics::drawFrame() {
         .pSignalSemaphores = signalSemaphores
     };
 
-    graphicsQueue.submit(1, &submitInfo, inFlightFences[currentFrame]);
+    if (graphicsQueue.submit(1, &submitInfo, inFlightFences[currentFrame]) != vk::Result::eSuccess) {
+        throw std::runtime_error("could not submit to queue");
+    }
 
     vk::SwapchainKHR swapChains[] = {swapChain};
     vk::PresentInfoKHR presentInfo{
