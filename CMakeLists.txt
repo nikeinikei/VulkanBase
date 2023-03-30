@@ -20,7 +20,8 @@ target_link_libraries(VulkanTest
 include_directories(
         ${Vulkan_INCLUDE_DIRS} 
         dependencies/imgui
-        dependencies/glm)
+        dependencies/glm
+        shaders/include)
 
 if(MSVC)
     set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT VulkanTest)

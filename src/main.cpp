@@ -1,3 +1,6 @@
+#include "fragmentShader.h"
+#include "vertexShader.h"
+
 #define VULKAN_HPP_NO_CONSTRUCTORS
 #include <vulkan/vulkan.hpp>
 #include <GLFW/glfw3.h>
@@ -466,18 +469,15 @@ void Graphics::createImageViews() {
 }
 
 void Graphics::createGraphicsPipeline() {
-    auto vertexShaderCode = readFile("shaders/vert.spv");
-    auto fragmentShaderCode = readFile("shaders/frag.spv");
-
     auto vertexShaderCreateInfo = vk::ShaderModuleCreateInfo{
-            .codeSize = vertexShaderCode.size(),
-            .pCode = reinterpret_cast<const uint32_t *>(vertexShaderCode.data())
+            .codeSize = vert_spv_len,
+            .pCode = reinterpret_cast<const uint32_t*>(vert_spv)
     };
     auto vertexShaderModule = device.createShaderModule(vertexShaderCreateInfo);
 
     auto fragmentShaderCreateInfo = vk::ShaderModuleCreateInfo{
-            .codeSize = fragmentShaderCode.size(),
-            .pCode = reinterpret_cast<const uint32_t *>(fragmentShaderCode.data())
+            .codeSize = frag_spv_len,
+            .pCode = reinterpret_cast<const uint32_t *>(frag_spv)
     };
     auto fragmentShaderModule = device.createShaderModule(fragmentShaderCreateInfo);
 
