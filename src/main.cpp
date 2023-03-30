@@ -505,25 +505,9 @@ void Graphics::createGraphicsPipeline() {
             .primitiveRestartEnable = VK_FALSE
     };
 
-    vk::Viewport viewport{
-            .x = 0.0f,
-            .y = 0.0f,
-            .width = (float) swapChainExtent.width,
-            .height = (float) swapChainExtent.height,
-            .minDepth = 0.0f,
-            .maxDepth = 1.0f,
-    };
-
-    vk::Rect2D scissor{
-            .offset = {0, 0},
-            .extent = swapChainExtent,
-    };
-
     vk::PipelineViewportStateCreateInfo viewportState{
         .viewportCount = 1,
-        .pViewports = &viewport,
         .scissorCount = 1,
-        .pScissors = &scissor,
     };
 
     vk::PipelineRasterizationStateCreateInfo rasterizer{
@@ -561,7 +545,8 @@ void Graphics::createGraphicsPipeline() {
     };
 
     std::vector<vk::DynamicState> dynamicStates = {
-            vk::DynamicState::eViewport
+            vk::DynamicState::eViewport,
+            vk::DynamicState::eScissor,
     };
 
     vk::PipelineDynamicStateCreateInfo dynamicState {
@@ -650,7 +635,11 @@ void Graphics::recordCommandBuffer(vk::CommandBuffer cmdBuffer, uint32_t imageIn
         }
     };
 
+    std::array<vk::Rect2D, 1> scissors;
+    scissors[0].extent = swapChainExtent;
+
     cmdBuffer.setViewport(0, viewports);
+    cmdBuffer.setScissor(0, scissors);
 
     cmdBuffer.draw(3, 1, 0, 0);
 
@@ -741,6 +730,7 @@ void Graphics::cleanupSwapChain() {
     for (const auto& imageView : swapChainImageViews) {
         device.destroy(imageView);
     }
+    swapChainImageViews.clear();
 
     device.destroy(swapChain);
 }
