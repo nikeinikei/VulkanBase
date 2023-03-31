@@ -585,11 +585,19 @@ void Graphics::recordCommandBuffer(vk::CommandBuffer cmdBuffer, uint32_t imageIn
 
     cmdBuffer.begin(beginInfo);
 
+    cmdTransitionImageLayout(cmdBuffer, swapChainImages[imageIndex], vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eColorAttachmentOptimal);
+
     vk::RenderingAttachmentInfo colorAttachmentInfo{
             .imageView = swapChainImageViews[imageIndex],
             .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
-            .loadOp = vk::AttachmentLoadOp::eDontCare,
+            .loadOp = vk::AttachmentLoadOp::eClear,
             .storeOp = vk::AttachmentStoreOp::eStore,
+            .clearValue = vk::ClearValue {
+                .color = vk::ClearColorValue {
+                    .float32 = std::array<float, 4> { 0.0f, 0.0f, 0.0f, 1.0f }
+                }
+            }
     };
 
     vk::RenderingInfo renderingInfo{
@@ -600,9 +608,6 @@ void Graphics::recordCommandBuffer(vk::CommandBuffer cmdBuffer, uint32_t imageIn
             .colorAttachmentCount = 1,
             .pColorAttachments = &colorAttachmentInfo,
     };
-
-    cmdTransitionImageLayout(cmdBuffer, swapChainImages[imageIndex], vk::ImageLayout::eUndefined,
-                             vk::ImageLayout::eColorAttachmentOptimal);
 
     cmdBuffer.beginRendering(renderingInfo);
 
@@ -700,7 +705,7 @@ void Graphics::drawFrame() {
             }
         }
     }
-    catch (std::runtime_error& e) {
+    catch (std::runtime_error&) {
         recreateSwapChain();
     }
 
